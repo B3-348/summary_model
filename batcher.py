@@ -354,21 +354,36 @@ class Batcher(object):
           new_t.daemon = True
           new_t.start()
 
-
+  ##############################################
+  #rewrite text_generator function, get the article_text and abstract_text,change the article(some sentences) to an integral whole
+  ##############################################
   def text_generator(self, example_generator):
-    """Generates article and abstract text from tf.Example.
 
-    Args:
-      example_generator: a generator of tf.Examples from file. See data.example_generator"""
     while True:
-      e = next(example_generator) # e is a tf.Example
-      try:
-        article_text = e.features.feature['article'].bytes_list.value[0].decode() # the article text was saved under the key 'article' in the data files
-        abstract_text = e.features.feature['abstract'].bytes_list.value[0].decode() # the abstract text was saved under the key 'abstract' in the data files
-      except ValueError:
-        tf.logging.error('Failed to get article or abstract from example')
-        continue
-      if len(article_text)==0: # See https://github.com/abisee/pointer-generator/issues/1
+      article_text, abstract_text = next(example_generator)
+      new_article_text = ''
+      if len(article_text) == 0:
+        # See https://github.com/abisee/pointer-generator/issues/1
         tf.logging.warning('Found an example with empty article text. Skipping it.')
       else:
-        yield (article_text, abstract_text)
+        for sent in article_text:
+          new_article_text += sent
+        yield (new_article_text, abstract_text)
+
+  # def text_generator(self, example_generator):
+  #   """Generates article and abstract text from tf.Example.
+  #
+  #   Args:
+  #     example_generator: a generator of tf.Examples from file. See data.example_generator"""
+  #   while True:
+  #     e = next(example_generator) # e is a tf.Example
+  #     try:
+  #       article_text = e.features.feature['article'].bytes_list.value[0].decode() # the article text was saved under the key 'article' in the data files
+  #       abstract_text = e.features.feature['abstract'].bytes_list.value[0].decode() # the abstract text was saved under the key 'abstract' in the data files
+  #     except ValueError:
+  #       tf.logging.error('Failed to get article or abstract from example')
+  #       continue
+  #     if len(article_text)==0: # See https://github.com/abisee/pointer-generator/issues/1
+  #       tf.logging.warning('Found an example with empty article text. Skipping it.')
+  #     else:
+  #       yield (article_text, abstract_text)

@@ -20,6 +20,8 @@ import glob
 import random
 import struct
 import csv
+import pickle as pkl
+import json
 from tensorflow.core.example import example_pb2
 
 # <s> and </s> are used in the data files to segment the abstracts into sentences. They don't receive vocab ids.
@@ -55,28 +57,48 @@ class Vocab(object):
             self._count += 1
 
         # Read the vocab file and add words up to max_size
-        with open(vocab_file, 'r') as vocab_f:
-            for line in vocab_f:
-                pieces = line.split()
-                if len(pieces) != 2:
-                    print('Warning: incorrectly formatted line in vocabulary file: %s\n' % line)
-                    continue
-                w = pieces[0]
-                if w in [SENTENCE_START, SENTENCE_END, UNKNOWN_TOKEN, PAD_TOKEN, START_DECODING, STOP_DECODING]:
-                    raise Exception(
-                        '<s>, </s>, [UNK], [PAD], [START] and [STOP] shouldn\'t be in the vocab file, but %s is' % w)
-                if w in self._word_to_id:
-                    raise Exception('Duplicated word in vocabulary file: %s' % w)
-                self._word_to_id[w] = self._count
-                self._id_to_word[self._count] = w
-                self._count += 1
-                if max_size != 0 and self._count >= max_size:
-                    print("max_size of vocab was specified as %i; we now have %i words. Stopping reading." % (
-                    max_size, self._count))
-                    break
+        with open(vocab_file, 'rb') as file:
+            v = pkl.load(file)
 
+        for w, _ in v:
+            if w in [SENTENCE_START, SENTENCE_END, UNKNOWN_TOKEN, PAD_TOKEN, START_DECODING, STOP_DECODING]:
+                raise Exception(
+                    '<s>, </s>, [UNK], [PAD], [START] and [STOP] shouldn\'t be in the vocab file, but %s is' % w)
+            if w in self._word_to_id:
+                raise Exception('Duplicated word in vocabulary file: %s' % w)
+            self._word_to_id[w] = self._count
+            self._id_to_word[self._count] = w
+            self._count += 1
+            if max_size != 0 and self._count >= max_size:
+                print("max_size of vocab was specified as %i; we now have %i words. Stopping reading." % (
+                max_size, self._count))
+                break
         print("Finished constructing vocabulary of %i total words. Last word added: %s" % (
         self._count, self._id_to_word[self._count - 1]))
+
+        # Read the vocab file and add words up to max_size
+        # with open(vocab_file, 'r') as vocab_f:
+        #     for line in vocab_f:
+        #         pieces = line.split()
+        #         if len(pieces) != 2:
+        #             print('Warning: incorrectly formatted line in vocabulary file: %s\n' % line)
+        #             continue
+        #         w = pieces[0]
+        #         if w in [SENTENCE_START, SENTENCE_END, UNKNOWN_TOKEN, PAD_TOKEN, START_DECODING, STOP_DECODING]:
+        #             raise Exception(
+        #                 '<s>, </s>, [UNK], [PAD], [START] and [STOP] shouldn\'t be in the vocab file, but %s is' % w)
+        #         if w in self._word_to_id:
+        #             raise Exception('Duplicated word in vocabulary file: %s' % w)
+        #         self._word_to_id[w] = self._count
+        #         self._id_to_word[self._count] = w
+        #         self._count += 1
+        #         if max_size != 0 and self._count >= max_size:
+        #             print("max_size of vocab was specified as %i; we now have %i words. Stopping reading." % (
+        #             max_size, self._count))
+        #             break
+        #
+        # print("Finished constructing vocabulary of %i total words. Last word added: %s" % (
+        # self._count, self._id_to_word[self._count - 1]))
 
     def word2id(self, word):
         """Returns the id (integer) of a word (string). Returns [UNK] id if word is OOV."""
@@ -109,40 +131,66 @@ class Vocab(object):
                 writer.writerow({"word": self._id_to_word[i]})
 
 
-def example_generator(data_path, single_pass):
-    """Generates tf.Examples from data files.
-
-      Binary data format: <length><blob>. <length> represents the byte size
-      of <blob>. <blob> is serialized tf.Example proto. The tf.Example contains
-      the tokenized article text and summary.
-
-    Args:
-      data_path:
-        Path to tf.Example data files. Can include wildcards, e.g. if you have several training data chunk files train_001.bin, train_002.bin, etc, then pass data_path=train_* to access them all.
-      single_pass:
-        Boolean. If True, go through the dataset exactly once, generating examples in the order they appear, then return. Otherwise, generate random examples indefinitely.
-
-    Yields:
-      Deserialized tf.Example.
-    """
-    while True:
-        filelist = glob.glob(data_path)  # get the list of datafiles
-        assert filelist, ('Error: Empty filelist at %s' % data_path)  # check filelist isn't empty
-        if single_pass:
-            filelist = sorted(filelist)
+###############################################
+#rewrite example_generator function
+###############################################
+def example_generator(data_path, single_pass = False, load_abstract = True):
+  #load_abstract: is load the true abstract,if not the abstract is the id of article
+  while True:
+    filelist = glob.glob(data_path) # get the list of datafiles
+    assert filelist, ('Error: Empty filelist at %s' % data_path) # check filelist isn't empty
+    if single_pass:
+      filelist = sorted(filelist)
+    else:
+      random.shuffle(filelist)
+    for f in filelist:
+        reader = open(f)
+        fileJson = json.load(reader)
+        article = fileJson['article']
+        if(load_abstract):
+          abstract = fileJson['abstract']
         else:
-            random.shuffle(filelist)
-        for f in filelist:
-            reader = open(f, 'rb')
-            while True:
-                len_bytes = reader.read(8)
-                if not len_bytes: break  # finished reading this file
-                str_len = struct.unpack('q', len_bytes)[0]
-                example_str = struct.unpack('%ds' % str_len, reader.read(str_len))[0]
-                yield example_pb2.Example.FromString(example_str)
-        if single_pass:
-            print("example_generator completed reading all datafiles. No more data.")
-            break
+          abstract = fileJson['id'] + '.txt'
+
+        yield (article, abstract)
+    if single_pass:
+      print("example_generator completed reading all datafiles. No more data.")
+      break
+
+# def example_generator(data_path, single_pass):
+#     """Generates tf.Examples from data files.
+#
+#       Binary data format: <length><blob>. <length> represents the byte size
+#       of <blob>. <blob> is serialized tf.Example proto. The tf.Example contains
+#       the tokenized article text and summary.
+#
+#     Args:
+#       data_path:
+#         Path to tf.Example data files. Can include wildcards, e.g. if you have several training data chunk files train_001.bin, train_002.bin, etc, then pass data_path=train_* to access them all.
+#       single_pass:
+#         Boolean. If True, go through the dataset exactly once, generating examples in the order they appear, then return. Otherwise, generate random examples indefinitely.
+#
+#     Yields:
+#       Deserialized tf.Example.
+#     """
+#     while True:
+#         filelist = glob.glob(data_path)  # get the list of datafiles
+#         assert filelist, ('Error: Empty filelist at %s' % data_path)  # check filelist isn't empty
+#         if single_pass:
+#             filelist = sorted(filelist)
+#         else:
+#             random.shuffle(filelist)
+#         for f in filelist:
+#             reader = open(f, 'rb')
+#             while True:
+#                 len_bytes = reader.read(8)
+#                 if not len_bytes: break  # finished reading this file
+#                 str_len = struct.unpack('q', len_bytes)[0]
+#                 example_str = struct.unpack('%ds' % str_len, reader.read(str_len))[0]
+#                 yield example_pb2.Example.FromString(example_str)
+#         if single_pass:
+#             print("example_generator completed reading all datafiles. No more data.")
+#             break
 
 
 def article2ids(article_words, vocab):
@@ -225,24 +273,33 @@ def outputids2words(id_list, vocab, article_oovs):
     return words
 
 
+########################################################
+#rewrite abstract2sents function, just one sentence
+########################################################
 def abstract2sents(abstract):
-    """Splits abstract text from datafile into list of sentences.
+  sents = []
+  a = abstract
+  sents.append(a)
+  return sents
 
-    Args:
-      abstract: string containing <s> and </s> tags for starts and ends of sentences
-
-    Returns:
-      sents: List of sentence strings (no tags)"""
-    cur = 0
-    sents = []
-    while True:
-        try:
-            start_p = abstract.index(SENTENCE_START, cur)
-            end_p = abstract.index(SENTENCE_END, start_p + 1)
-            cur = end_p + len(SENTENCE_END)
-            sents.append(abstract[start_p + len(SENTENCE_START):end_p])
-        except ValueError as e:  # no more sentences
-            return sents
+# def abstract2sents(abstract):
+#     """Splits abstract text from datafile into list of sentences.
+#
+#     Args:
+#       abstract: string containing <s> and </s> tags for starts and ends of sentences
+#
+#     Returns:
+#       sents: List of sentence strings (no tags)"""
+#     cur = 0
+#     sents = []
+#     while True:
+#         try:
+#             start_p = abstract.index(SENTENCE_START, cur)
+#             end_p = abstract.index(SENTENCE_END, start_p + 1)
+#             cur = end_p + len(SENTENCE_END)
+#             sents.append(abstract[start_p + len(SENTENCE_START):end_p])
+#         except ValueError as e:  # no more sentences
+#             return sents
 
 
 def show_art_oovs(article, vocab):

@@ -40,7 +40,8 @@ tf.app.flags.DEFINE_string('vocab_path', '', 'Path expression to text vocabulary
 tf.app.flags.DEFINE_string('mode', 'train', 'must be one of train/eval/decode')
 tf.app.flags.DEFINE_boolean('single_pass', True,
                             'For decode mode only. If True, run eval on the full dataset using a fixed checkpoint, i.e. take the current checkpoint, and use it to produce one summary for each example in the dataset, write the summaries to file and then get ROUGE scores for the whole dataset. If False (default), run concurrent decoding, i.e. repeatedly load latest checkpoint, use it to produce summaries for randomly-chosen examples and log the results to screen, indefinitely.')
-
+tf.app.flags.DEFINE_float("lr_decat_rate", 0.95, 'learning rate decay number')
+tf.app.flags.DEFINE_integer("impatient", 10, 'If val_loss or val_reward is bigger or smaller than the best_val impatient times, we will do a early stop')
 # Where to save output
 tf.app.flags.DEFINE_string('log_root', '', 'Root directory for all logging.')
 tf.app.flags.DEFINE_string('exp_name', '',

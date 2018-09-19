@@ -50,16 +50,19 @@ def load_ckpt(saver, sess, ckpt_dir="train"):
             tf.logging.info("Failed to load checkpoint from %s. Sleeping for %i secs...", ckpt_dir, 10)
             time.sleep(10)
 
-
 def get_word_vector_and_write_out(w2v_file, out_put_text_file):
     # word2vec.{dim}d.{vsize}k.bin
     attrs = basename(w2v_file).split('.')
     w2v = gensim.models.Word2Vec.load(w2v_file).wv
     with open(out_put_text_file, 'w') as out_file:
+        count = 0
         for key in w2v.vocab:
-            print(*w2v[key])
-            break
+            vector_str = str(w2v[key]).replace('[', '').replace(']', '')
+            out_str = key + ' ' + vector_str
+            out_file.write(out_str+'\n')
+            print("process {} words".format(count))
 
+            count += 1
 
 
 if __name__ == '__main__':

@@ -19,6 +19,7 @@
 import tensorflow as tf
 import time
 import os
+import gensim
 
 from os.path import basename
 
@@ -50,5 +51,17 @@ def load_ckpt(saver, sess, ckpt_dir="train"):
             time.sleep(10)
 
 
-def get_word_vector(w2v_file):
-    attrs = basename(w2v_file).split('.')  #word2vec.{dim}d.{vsize}k.bin
+def get_word_vector_and_write_out(w2v_file, out_put_text_file):
+    # word2vec.{dim}d.{vsize}k.bin
+    attrs = basename(w2v_file).split('.')
+    w2v = gensim.models.Word2Vec.load(w2v_file).wv
+    with open(out_put_text_file, 'w') as out_file:
+        for key in w2v.vocab:
+            print(*w2v[key])
+            break
+
+
+
+if __name__ == '__main__':
+    w2v_path = "/home/lemin/1TBdisk/PycharmProjects/fast_abs_rl/word_vector_bcc/word2vec.128d.866k.bin"
+    get_word_vector_and_write_out(w2v_path, 'embedding.txt')

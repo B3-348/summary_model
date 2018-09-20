@@ -20,6 +20,8 @@ import tensorflow as tf
 import time
 import os
 import gensim
+import numpy as np
+from models.sentence_embedding import Word, Sentence, sentence_to_vec
 
 from os.path import basename
 
@@ -50,6 +52,24 @@ def load_ckpt(saver, sess, ckpt_dir="train"):
             tf.logging.info("Failed to load checkpoint from %s. Sleeping for %i secs...", ckpt_dir, 10)
             time.sleep(10)
 
+
+def sentece2vector(sentences, w2v, embed_size):
+    sentence_list = []
+
+    for sentence in sentences:
+        word_list = []
+        for word in sentence:
+            token = w2v[word]
+            if token is not None:
+                word_list.append(Word(word, token))
+        if len(word_list) > 0:
+            sentence_list.append(Sentence(word_list))
+
+    sentence_vectors = sentence_to_vec(sentence_list, embed_size)
+
+    return sentence_vectors
+
+
 def get_word_vector_and_write_out(w2v_file, out_put_text_file):
     # word2vec.{dim}d.{vsize}k.bin
     attrs = basename(w2v_file).split('.')
@@ -66,5 +86,5 @@ def get_word_vector_and_write_out(w2v_file, out_put_text_file):
 
 
 if __name__ == '__main__':
-    w2v_path = "/home/lemin/1TBdisk/PycharmProjects/fast_abs_rl/word_vector_bcc/word2vec.128d.866k.bin"
-    get_word_vector_and_write_out(w2v_path, 'embedding.txt')
+    pass
+

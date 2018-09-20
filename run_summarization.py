@@ -40,7 +40,7 @@ tf.app.flags.DEFINE_string('vocab_path', '', 'Path expression to text vocabulary
 tf.app.flags.DEFINE_string('mode', 'train', 'must be one of train/eval/decode')
 tf.app.flags.DEFINE_boolean('single_pass', True,
                             'For decode mode only. If True, run eval on the full dataset using a fixed checkpoint, i.e. take the current checkpoint, and use it to produce one summary for each example in the dataset, write the summaries to file and then get ROUGE scores for the whole dataset. If False (default), run concurrent decoding, i.e. repeatedly load latest checkpoint, use it to produce summaries for randomly-chosen examples and log the results to screen, indefinitely.')
-tf.app.flags.DEFINE_float("lr_decat_rate", 0.95, 'learning rate decay number')
+tf.app.flags.DEFINE_float("lr_decay_rate", 0.95, 'learning rate decay number')
 tf.app.flags.DEFINE_integer("impatient", 10, 'If val_loss or val_reward is bigger or smaller than the best_val impatient times, we will do a early stop')
 # Where to save output
 tf.app.flags.DEFINE_string('log_root', '', 'Root directory for all logging.')
@@ -48,6 +48,7 @@ tf.app.flags.DEFINE_string('exp_name', '',
                            'Name for experiment. Logs will be saved in a directory with this name, under log_root.')
 
 # Hyperparameters
+tf.app.flags.DEFINE_string('embedding', '', 'path to word2vector file')
 tf.app.flags.DEFINE_integer('hidden_dim', 256, 'dimension of RNN hidden states')
 tf.app.flags.DEFINE_integer('emb_dim', 128, 'dimension of word embeddings')
 tf.app.flags.DEFINE_integer('batch_size', 16, 'minibatch size')
@@ -164,6 +165,11 @@ def setup_training(model, batcher):
     train_dir = os.path.join(FLAGS.log_root, "train")
     if not os.path.exists(train_dir): os.makedirs(train_dir)
 
+    vocab = Vocab(FLAGS.vocab_path, FLAGS.vocab_size)  # create a vocabulary
+    if FLAGS.embedding:
+        vocab.load_word_embedding(FLAGS.embedding, FLAGS.emb_dim)
+        word_vector = vocab.get_word_embedding()
+
     model.build_graph()  # build the graph
     if FLAGS.convert_to_coverage_model:
         assert FLAGS.coverage, "To convert your non-coverage models to a coverage models, run with convert_to_coverage_model=True and coverage=True"
@@ -178,7 +184,10 @@ def setup_training(model, batcher):
                              summary_op=None,
                              save_summaries_secs=60,  # save summaries for tensorboard every 60 secs
                              save_model_secs=60,  # checkpoint every 60 secs
-                             global_step=model.global_step)
+                             global_step=model.global_step,
+                             init_feed_dict={
+                                model.embedding_place: word_vector} if FLAGS.embedding else None
+                             )
     summary_writer = sv.summary_writer
     tf.logging.info("Preparing or waiting for session...")
     sess_context_manager = sv.prepare_or_wait_for_session(config=util.get_config())

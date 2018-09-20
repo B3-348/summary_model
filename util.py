@@ -20,6 +20,8 @@ import tensorflow as tf
 import time
 import os
 import gensim
+import numpy as np
+from models.sentence_embedding import Word, Sentence, sentence_to_vec
 
 from os.path import basename
 from rouge import rouge
@@ -51,14 +53,35 @@ def load_ckpt(saver, sess, ckpt_dir="train"):
             time.sleep(10)
 
 
+def sentece2vector(sentences, w2v, embed_size):
+    sentence_list = []
+
+    for sentence in sentences:
+        word_list = []
+        for word in sentence:
+            token = w2v[word]
+            if token is not None:
+                word_list.append(Word(word, token))
+        if len(word_list) > 0:
+            sentence_list.append(Sentence(word_list))
+
+    sentence_vectors = sentence_to_vec(sentence_list, embed_size)
+
+    return sentence_vectors
+
+
 def get_word_vector_and_write_out(w2v_file, out_put_text_file):
     # word2vec.{dim}d.{vsize}k.bin
     attrs = basename(w2v_file).split('.')
     w2v = gensim.models.Word2Vec.load(w2v_file).wv
     with open(out_put_text_file, 'w') as out_file:
+        count = 0
         for key in w2v.vocab:
-            print(*w2v[key])
-            break
+            vector_str = str(w2v[key]).replace('[', '').replace(']', '')
+            out_str = key + ' ' + vector_str
+            out_file.write(out_str+'\n')
+            print("process {} words".format(count))
+
 
 def get_score_article(batch_article,batch_abstract,max_num_sentence,baseline_score):
     article_batch = tf.unstack(batch_article)
@@ -82,7 +105,6 @@ def get_score_article(batch_article,batch_abstract,max_num_sentence,baseline_sco
 
 
 
-
 if __name__ == '__main__':
-    w2v_path = "/home/lemin/1TBdisk/PycharmProjects/fast_abs_rl/word_vector_bcc/word2vec.128d.866k.bin"
-    get_word_vector_and_write_out(w2v_path, 'embedding.txt')
+    pass
+

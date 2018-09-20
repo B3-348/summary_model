@@ -1,3 +1,4 @@
+
 import  tensorflow as tf
 import  numpy as np
 import json
@@ -98,4 +99,5 @@ with tf.Session() as sess:
     sess.run(features)
     with open('/home/cy/features.json') as read_f:
         json.dump(features,read_f)
+
 

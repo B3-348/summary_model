@@ -46,6 +46,9 @@ import pickle as pkl
 
 import json
 
+
+import numpy as np
+
 from tensorflow.core.example import example_pb2
 
 
@@ -260,6 +263,39 @@ class Vocab(object):
 
                 writer.writerow({"word": self._id_to_word[i]})
 
+    def load_word_embedding(self, w2v_file, word_dim):
+        self.wordDict = {}
+        self.word_dim = word_dim
+
+        self.wordDict[UNKNOWN_TOKEN] = np.zeros(self.word_dim, dtype=np.float32)
+        self.wordDict[PAD_TOKEN] = np.random.uniform(-1, 1, self.word_dim)
+        self.wordDict[START_DECODING] = np.random.uniform(-1, 1, self.word_dim)
+        self.wordDict[STOP_DECODING] = np.random.uniform(-1, 1, self.word_dim)
+
+        # load word embedding from word2vector file
+        with open(w2v_file) as wf:
+            wf.readline()
+            for line in wf:
+                info = line.strip().split()
+                word = info[0]
+                coef = np.asarray(info[1:], dtype='float32')
+                self.wordDict[word] = coef
+                assert self.word_dim == len(coef)
+
+        self.make_word_embedding()
+
+    def make_word_embedding(self):
+        sorted_x = sorted(self._word_to_id.items(), key=operator.itemgetter(1))
+        self._wordEmbedding = np.zeros((self.size(), self.word_dim),
+                                       dtype=np.float32)  # replace unknown words with UNKNOWN_TOKEN embedding (zero vector)
+        for word, i in sorted_x:
+            if word in self.wordDict:
+                self._wordEmbedding[i, :] = self.wordDict[word.lower()]
+        print('Word Embedding Reading done.')
+
+
+    def get_word_embedding(self):
+        return self._wordEmbedding
 
 
 

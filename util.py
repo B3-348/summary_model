@@ -22,7 +22,7 @@ import os
 import gensim
 
 from os.path import basename
-
+from rouge import rouge
 FLAGS = tf.app.flags.FLAGS
 
 
@@ -59,6 +59,27 @@ def get_word_vector_and_write_out(w2v_file, out_put_text_file):
         for key in w2v.vocab:
             print(*w2v[key])
             break
+
+def get_score_article(batch_article,batch_abstract,max_num_sentence,baseline_score):
+    article_batch = tf.unstack(batch_article)
+    abstract_batch = tf.unstack(batch_abstract)
+    num = 0
+    sentence_score = []
+    sentence_class = []
+    for article in article_batch:
+        article_sentence = tf.unstack(article,axis=0)
+        for sentence in article_sentence:
+            score = rouge(sentence,abstract_batch[num])
+            if score > baseline_score:
+                sentence_class.append(1)
+            else:
+                sentence_class.append(0)
+            sentence_score.append(score)
+        num = num + 1
+    sentence_score = tf.reshape(sentence_score,[-1,max_num_sentence])
+    sentence_class = tf.reshape(sentence_class,[-1,max_num_sentence])
+    return  sentence_score , sentence_class
+
 
 
 

@@ -23,12 +23,32 @@ import time
 import numpy as np
 import tensorflow as tf
 import data
+import json
+
+# test get data
+class Get_article(object):
+
+  def __init__(self,data_path,vocab):
+    self.vocab = vocab
+    content = data.example_generator(data_path=data_path)
+    self.example = self.get_example(content)
+
+  def next_example(self):
+    example = next(self.example)
+    return example
+
+  def get_example(self,content):
+      article,abstract = next(content)
+
+      example = Example(article,abstract,self.vocab)
+      yield example
+
 
 
 class Example(object):
   """Class representing a train/val/test example for text summarization."""
 
-  def __init__(self, article, abstract_sentences, vocab, hps):
+  def __init__(self, article, abstract_sentences, vocab, hps=None):
     """Initializes the Example, performing tokenization and truncation to produce the encoder, decoder and target sequences, which are stored in self.
 
     Args:
@@ -43,18 +63,47 @@ class Example(object):
     start_decoding = vocab.word2id(data.START_DECODING)
     stop_decoding = vocab.word2id(data.STOP_DECODING)
 
+    # test process the article
+    max_num_sentence = 5
+    max_sentence_len = 100
+    max_abstract_len = 50
+    self.enc_input = np.zeros((5,100),dtype=np.int32)
+    self.abs_ids = np.zeros((1,50),dtype=np.int32)
+    self.enc_sentence_len = np.zeros((1,5),dtype=np.int32)
+    for k,sentence in enumerate(article):
+      if k < 5:
+        sentence = sentence.split()
+        if len(sentence) >max_sentence_len:
+          sentence = sentence[:max_sentence_len]
+        self.enc_sentence_len[0,k]  = len(sentence)
+        for i ,word in enumerate(sentence):
+          self.enc_input[k,i] = vocab.word2id(word)
+
+
+    # Process the abstract
+    abstract = ' '.join(abstract_sentences)  # string
+    abstract_words = abstract.split()  # list of strings
+    if len(abstract_words)>max_abstract_len:
+      abstract_words = abstract_words[:max_abstract_len]
+    for j ,word in enumerate(abstract_words):
+       self.abs_ids[0,j] = vocab.word2id(word)
+
+    """
     # Process the article
+
     article_words = article.split()
     if len(article_words) > hps.max_enc_steps:
       article_words = article_words[:hps.max_enc_steps]
     self.enc_len = len(article_words) # store the length after truncation but before padding
     self.enc_input = [vocab.word2id(w) for w in article_words] # list of word ids; OOVs are represented by the id for UNK token
 
+
+    
     # Process the abstract
     abstract = ' '.join(abstract_sentences) # string
     abstract_words = abstract.split() # list of strings
     abs_ids = [vocab.word2id(w) for w in abstract_words] # list of word ids; OOVs are represented by the id for UNK token
-
+    
     # Get the decoder input sequence and target sequence
     self.dec_input, self.target = self.get_dec_inp_targ_seqs(abs_ids, hps.max_dec_steps, start_decoding, stop_decoding)
     self.dec_len = len(self.dec_input)
@@ -74,6 +123,8 @@ class Example(object):
     self.original_article = article
     self.original_abstract = abstract
     self.original_abstract_sents = abstract_sentences
+
+  """
 
 
   def get_dec_inp_targ_seqs(self, sequence, max_len, start_id, stop_id):

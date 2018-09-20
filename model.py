@@ -22,7 +22,7 @@ import numpy as np
 import tensorflow as tf
 from attention_decoder import attention_decoder
 from tensorflow.contrib.tensorboard.plugins import projector
-
+import util
 FLAGS = tf.app.flags.FLAGS
 
 
@@ -76,6 +76,11 @@ class SummarizationModel(object):
             feed_dict[self._target_batch] = batch.target_batch
             feed_dict[self._dec_padding_mask] = batch.dec_padding_mask
         return feed_dict
+
+
+
+
+
 
     def _add_encoder(self, encoder_inputs, seq_len):
         """Add a single-layer bidirectional LSTM encoder to the graph.
@@ -220,8 +225,7 @@ class SummarizationModel(object):
 
         with tf.variable_scope('seq2seq'):
             # Some initializers
-            self.rand_unif_init = tf.random_uniform_initializer(-hps.rand_unif_init_mag, hps.rand_unif_init_mag,
-                                                                seed=123)
+            self.rand_unif_init = tf.random_uniform_initializer(-hps.rand_unif_init_mag, hps.rand_unif_init_mag,seed=123)
             self.trunc_norm_init = tf.truncated_normal_initializer(stddev=hps.trunc_norm_init_std)
 
             # Add embedding matrix (shared by the encoder and decoder inputs)

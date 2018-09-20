@@ -72,6 +72,26 @@ def write_out_file(file_list, split):
                 index3_end = index3 + len("`` title '' :")
 
                 content = line[index1_end + 1:index2 - 1].strip()
+
+                nid = line[index2_end:index3].strip()
+                title = line[index3_end + 1:].strip()
+
+                content = content[2:-4].strip().lower()
+                nid = nid[:-1].strip()
+                title = title[2:-7].strip().lower()
+
+                article = []
+                content = content.replace("\\", "")
+                contents = content.split(" . ")[:-1]
+                for c in contents:
+                    if len(c.replace(" ", "").strip()) != 0:
+                        article.append(c)
+                if len(contents) == 0:
+                    article = [content]
+
+                save_obj["article"] = article
+                save_obj["id"] = nid
+
                 id = line[index2_end:index3].strip()
                 title = line[index3_end + 1:].strip()
 
@@ -100,6 +120,7 @@ def write_out_file(file_list, split):
 
                 save_obj["article"] = article
                 save_obj["id"] = id
+
                 save_obj["abstract"] = [title]
 
                 with open(os.path.join(SAVE_DATA_PATH, "{0}/{1}.json".format(split, count)), 'w') as json_file:

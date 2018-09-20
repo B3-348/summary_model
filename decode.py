@@ -25,7 +25,6 @@ import json
 import pyrouge
 import util
 import logging
-import numpy as np
 
 FLAGS = tf.app.flags.FLAGS
 

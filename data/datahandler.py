@@ -1,7 +1,7 @@
 import json
 import os
 
-SAVE_DATA_PATH = ""
+SAVE_DATA_PATH = "/media/yyl/e62cfea3-fff0-4e79-9e11-b0b00c401896/bine/data"
 
 
 def write_test_file_to_json(file_path, json_file_path):
@@ -120,6 +120,9 @@ def convert_dataSet(train_file_list, val_file_list, test_file_list):
 
     if len(test_file_list) > 0:
         write_out_file(test_file_list, "test")
+train_file_list = ['/media/yyl/e62cfea3-fff0-4e79-9e11-b0b00c401896/bine/tokenizer/bytecup.corpus.train.{}.txt'.format(i) for i in range(8)]
+val_file_list = ['/media/yyl/e62cfea3-fff0-4e79-9e11-b0b00c401896/bine/tokenizer/bytecup.corpus.train.8.txt']
+test_file = '/media/yyl/e62cfea3-fff0-4e79-9e11-b0b00c401896/bine/tokenizer/bytecup.corpus.validation_set.txt'
+#convert_dataSet(train_file_list, val_file_list, test_file_list)
 
-
-
+write_test_file_to_json(test_file, SAVE_DATA_PATH + '/test')

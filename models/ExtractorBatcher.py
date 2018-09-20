@@ -123,7 +123,7 @@ class Batch(object):
 
     self.target_batch = []
     for ex in  example_list:
-        self.input_batch.append(ex.target)
+        self.target_batch.append(ex.target)
 
 
   def store_orig_strings(self, example_list):

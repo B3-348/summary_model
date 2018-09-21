@@ -99,12 +99,14 @@ def example_generator(data_path, single_pass = False):
         assert filelist, ('Error: Empty filelist at %s' % data_path)
         for f in filelist:
             with open(f) as reader:
+
                 filejosn = json.load(reader)
                 sents = filejosn['article']
                 abstract = filejosn['abstract']
                 sents_id = filejosn['sents_id']
                 scores = filejosn['scores']
-            yield (sents, abstract, sents_id, scores)
+
+                yield (sents, abstract, sents_id, scores)
         if single_pass:
             print("example_generator completed reading all datafiles. No more data.")
             break

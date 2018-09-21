@@ -105,8 +105,7 @@ def example_generator(data_path, single_pass = False):
                 abstract = filejosn['abstract']
                 sents_id = filejosn['sents_id']
                 scores = filejosn['scores']
-                #print(sents[0])
-                #print('example_generator:', len(sents))
+
                 yield (sents, abstract, sents_id, scores)
         if single_pass:
             print("example_generator completed reading all datafiles. No more data.")

@@ -5,6 +5,7 @@ import time
 import numpy as np
 import tensorflow as tf
 import NewData as data
+import random
 class Example(object):
   """Class representing a train/val/test example for text summarization."""
 
@@ -30,12 +31,13 @@ class Example(object):
 
     #Process the sentences
     self.article_len = len(sents)
-    self.maxlen_sents = max([len(sent.split()) for sent in sents])
+
+    self.max_sents_len = max([len(sent.split()) for sent in sents])
     for sent in sents:
         sent_words = sent.split()
         sent_input = [vocab.word2id(w) for w in sent_words]
-        while len(sent_input) < self.maxlen_sents:
-            sent_input.append(self.pad_id)
+        #while len(sent_input) < self.max_sents_len:
+        #   sent_input.append(self.pad_id)
         self.sents_input.append(sent_input)
 
     #Process the target
@@ -45,12 +47,17 @@ class Example(object):
             self.target[ind] = 1
         else: break
 
-  def pad_article(self, maxlen, pad_id):
-      while self.article_len < maxlen:
-          self.sents_input.append([pad_id] * self.maxlen_sents)
+  def pad_article2mat(self, max_arts_len, max_sents_len_glob, pad_id):
 
-  def pad_target(self,maxlen, pad_id):
-      while self.article_len < maxlen:
+      for sent_input in self.sents_input:
+        while len(sent_input) < max_sents_len_glob:
+          sent_input.append(pad_id)
+      while len(self.sents_input) < max_arts_len:
+          self.sents_input.append([pad_id] * max_sents_len_glob)
+
+
+  def pad_target(self,max_arts_len, pad_id):
+      while len(self.target) < max_arts_len:
           self.target.append(pad_id)
 
 class Batch(object):
@@ -66,8 +73,9 @@ class Batch(object):
     """
     self.pad_id = vocab.word2id(data.PAD_TOKEN) # id of the PAD token used to pad sequences
     self.target_pad_id = 0
+    self.init_decoder_seq(example_list, hps)  # initialize the input and targets for the decoder
     self.init_encoder_seq(example_list, hps) # initialize the input to the encoder
-    self.init_decoder_seq(example_list, hps) # initialize the input and targets for the decoder
+
     self.store_orig_strings(example_list) # store the original strings
 
   def init_encoder_seq(self, example_list, hps):
@@ -91,19 +99,26 @@ class Batch(object):
     #max_enc_seq_len = max([ex.enc_len for ex in example_list])
 
     max_article_len = max([ex.article_len for ex in example_list])
+    max_sents_len_glob = max([ex.max_sents_len for ex in example_list])
     # Pad the encoder input sequences up to the length of the longest sequence
     for ex in example_list:
       #ex.pad_encoder_input(max_enc_seq_len, self.pad_id)
-      ex.pad_article(max_article_len, self.pad_id)
+      ex.pad_article2mat(max_article_len, max_sents_len_glob, self.pad_id)
 
-    self.input_batch = []
-    self.input_lens = []
+
+    self.input_batch = np.zeros((hps.batch_size, max_article_len, max_sents_len_glob), dtype=np.int32)
+    self.input_lens = np.zeros((hps.batch_size), dtype=np.int32)
     self.articles_padding_mask = np.zeros((hps.batch_size, max_article_len), dtype=np.float32)
+    self.nums = np.zeros((hps.batch_size), dtype=np.float32)
     for i, ex in  enumerate(example_list):
-        self.input_batch.append(ex.sents_input)
-        self.input_lens.append(ex.article_len)
-        for j in range(ex.article_len):
-          self.articles_padding_mask[i][j] = 1
+      #print(ex.sents_input.shape)
+      for j in range(max_article_len):
+        self.input_batch[i, j, :] = ex.sents_input[j]#ex.sents_input[:]
+      #
+      #print(ex.article_len)
+      self.input_lens[i] = ex.article_len
+      for j in range(ex.article_len):
+        self.articles_padding_mask[i][j] = 1
 
 
 
@@ -121,9 +136,9 @@ class Batch(object):
     for ex in example_list:
       ex.pad_target(max_article_len, self.target_pad_id)
 
-    self.target_batch = []
-    for ex in  example_list:
-        self.target_batch.append(ex.target)
+    self.target_batch = np.zeros((hps.batch_size, max_article_len), dtype=np.float32)
+    for i, ex in  enumerate(example_list):
+        self.target_batch[i, :] = ex.target[:]
 
 
   def store_orig_strings(self, example_list):
@@ -236,16 +251,19 @@ class Batcher(object):
         inputs = []
         for _ in range(self._hps.batch_size * self._bucketing_cache_size):
           inputs.append(self._example_queue.get())
+
         inputs = sorted(inputs, key=lambda inp: inp.article_len) # sort by length of encoder sequence
 
         # Group the sorted Examples into batches, optionally shuffle the batches, and place in the batch queue.
         batches = []
         for i in range(0, len(inputs), self._hps.batch_size):
           batches.append(inputs[i:i + self._hps.batch_size])
+
         if not self._single_pass:
           shuffle(batches)
         for b in batches:  # each b is a list of Example objects
           self._batch_queue.put(Batch(b, self._hps, self._vocab))
+          print('put a batch')
 
       else: # beam search decode mode
         ex = self._example_queue.get()
@@ -286,7 +304,6 @@ class Batcher(object):
         tf.logging.warning('Found an example with empty article text. Skipping it.')
       else:
         yield (sents, abstract, sents_id, scores)
-
   # def text_generator(self, example_generator):
   #   """Generates article and abstract text from tf.Example.
   #

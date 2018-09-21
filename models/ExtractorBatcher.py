@@ -42,10 +42,16 @@ class Example(object):
 
     #Process the target
     self.target = [0] * self.article_len
-    for ind, score in zip(target,scores):
-        if(score > hps.threshold):
-            self.target[ind] = 1
-        else: break
+    #Top K sents
+    for i in range(hps.k):
+        if(i<self.article_len):
+            self.target[target[i]] =1
+
+
+    # for ind, score in zip(target,scores):
+    #     if(score > hps.threshold):
+    #         self.target[ind] = 1
+    #     else: break
 
   def pad_article2mat(self, max_arts_len, max_sents_len_glob, pad_id):
 

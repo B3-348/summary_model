@@ -156,7 +156,10 @@ class BeamSearchDecoder(object):
 
         # Write to file
         ref_file = os.path.join(self._rouge_ref_dir, "%06d_reference.txt" % ex_index)
-        decoded_file = os.path.join(self._rouge_dec_dir, "%06d_decoded.txt" % ex_index)
+        #decoded_file = os.path.join(self._rouge_dec_dir, "%06d_decoded.txt" % ex_index)
+
+        # No ture reference, reference is the id of article
+        decoded_file = os.path.join(self._rouge_dec_dir, reference_sents[0])
 
         with open(ref_file, "w") as f:
             for idx, sent in enumerate(reference_sents):

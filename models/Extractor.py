@@ -1,6 +1,7 @@
 import  tensorflow as tf
 import json
 
+import tensorflow.contrib as tc
 
 def normalize(inputs,
               epsilon=1e-8,
@@ -30,6 +31,7 @@ def normalize(inputs,
         outputs = gamma * normalized + beta
 
     return outputs
+
 
 class Extractor(object):
     def __init__(self, batch, hps, vocab):
@@ -61,8 +63,65 @@ class Extractor(object):
 
             return conv_output
 
-    def multihead_attention(self,
-                            queries,
+    def _reduce_conv_output(self, conv_output):
+        """
+        This method is to reduce max_words dim use sum method
+
+        Args:
+            conv_output: a 3-D tensor of shape [max_sentences, max_words, hidden_size]
+        Returns:
+            reduce_conv_output: a 2-D tensor of shape [max_sentences, hidden_size]
+        """
+        assert len(conv_output.shape) == 3
+
+        reduce_conv_output = tf.reduce_sum(conv_output, axis=1)
+
+        return reduce_conv_output
+
+    def _add_placeholder(self):
+        self.article = tf.placeholder(dtype=tf.float32, shape=[None, None, None, self._hps.embed_size], name="article")
+        self.target = tf.placeholder(dtype=tf.float32, shape=[None, None], name="target")
+
+    def _conv_sentence_features(self):
+        """
+        build network to pick useful sentence from  all sentence of article
+        :return:
+        """
+
+        with tf.variable_scope("pick_sentence"):
+            self.rand_unif_init = tf.random_uniform_initializer(-self._hps.rand_unif_init_mag, self._hps.rand_unif_init_mag,seed=123)
+            self.trunc_norm_init = tf.truncated_normal_initializer(stddev=self._hps.trunc_norm_init_std)
+            #sentence_score, sentence_class = util.get_score_article(self._batch.enc_batch, self._batch._dec_batch,self._hps.max_num_sentence)
+            with tf.variable_scope("classified_embedding"):
+                classified_embedding = tf.get_variable('classified_embedding', [self.vsize, self._hps.emb_dim],initializer=self.trunc_norm_init)
+                emb_article = tf.nn.embedding_lookup(classified_embedding, self._batch.enc_input)
+            cnn_kwidths_list = self._hps.cnn_kwiths_list #[6,7,8]
+            cnn_hidden_dim = self._hps.cnn_hidden_dim #[128,128,128]
+            self.batch_features = []
+            i=1
+            #for id_article in tf.unstack(emb_article):
+            if i>0:
+                #  id_article# shape:[num_sentence,max_enc_steps,emb_dim]
+                id_article = emb_article
+                pre_v = tf.get_variable('pre_v',shape=[id_article.get_shape()[-1],cnn_hidden_dim[0]])
+                pre_b = tf.get_variable('pre_b',shape=[cnn_hidden_dim[0]],dtype=tf.float32,initializer=tf.zeros_initializer)
+                next_input = id_article * pre_v + pre_b #initlizer ,transfer input article shape to input shape:[5,100,128]
+                for i in range(self._hps.cnn_layers):
+                     with tf.variable_scope('conv_layer_'+str(i)):
+                          in_dim = id_article.get_shape()[-1]
+                          v = tf.get_variable('v',shape=[cnn_kwidths_list[i],in_dim,cnn_hidden_dim[i]],dtype=tf.float32,initializer=tf.random_normal_initializer(mean=0,stddev=0.1),trainable=True)
+                          w = tf.nn.l2_normalize(v,[0,1])
+                          b = tf.get_variable('b',shape=[cnn_hidden_dim[i]],dtype=tf.float32,initializer=tf.zeros_initializer(),trainable=True)
+                          next_input = tf.nn.conv1d(value=next_input,filters=w,stride=1,padding="SAME")
+                fea_w = tf.get_variable('pre_w',shape=[cnn_hidden_dim[-1],1],dtype=tf.float32,initializer=tf.random_normal_initializer(mean=0,stddev=0.1),trainable=True)
+                fea_b = tf.get_variable('fea_b',dtype=tf.float32,initializer=tf.zeros_initializer,trainable=True)
+                article_features = tf.nn.bias_add(tf.matmul(next_input,fea_w),fea_b)
+                self.batch_features.append(article_features)
+                tf.layers.conv2d()
+        return self.batch_features
+
+    @staticmethod
+    def multihead_attention(queries,
                             keys,
                             num_units=None,
                             num_heads=8,
@@ -156,67 +215,81 @@ class Extractor(object):
 
         return outputs
 
-    def _conv_sentence_features(self):
+    @staticmethod
+    def feedforward(inputs,
+                    num_units=[2048, 512],
+                    scope="multihead_attention",
+                    reuse=None):
+        '''Point-wise feed forward net.
+
+        Args:
+          inputs: A 3d tensor with shape of [N, T, C].
+          num_units: A list of two integers.
+          scope: Optional scope for `variable_scope`.
+          reuse: Boolean, whether to reuse the weights of a previous layer
+            by the same name.
+
+        Returns:
+          A 3d tensor with the same shape and dtype as inputs
+        '''
+        with tf.variable_scope(scope, reuse=reuse):
+            # Inner layer
+            params = {"inputs": inputs, "filters": num_units[0], "kernel_size": 1,
+                      "activation": tf.nn.relu, "use_bias": True}
+            outputs = tf.layers.conv1d(**params)
+
+            # Readout layer
+            params = {"inputs": outputs, "filters": num_units[1], "kernel_size": 1,
+                      "activation": None, "use_bias": True}
+            outputs = tf.layers.conv1d(**params)
+
+            # Residual connection
+            outputs += inputs
+
+            # Normalize
+            outputs = normalize(outputs)
+
+        return outputs
+
+    def _predicted(self, transform_output, scope_name="predicted"):
         """
-        build network to pick useful sentence from  all sentence of article
-        :return:
+        Args:
+            transform_output: a 2-D tensor of shape [batch_size, attn_size]
+        Output:
+            predicted: a 2-D tensor of shape [batch_size, attn_size]
         """
+        with tf.variable_scope(scope_name):
+            assert len(transform_output.shape) == 2
 
-        with tf.variable_scope("pick_sentence"):
-            self.rand_unif_init = tf.random_uniform_initializer(-self._hps.rand_unif_init_mag, self._hps.rand_unif_init_mag,seed=123)
-            self.trunc_norm_init = tf.truncated_normal_initializer(stddev=self._hps.trunc_norm_init_std)
-            #sentence_score, sentence_class = util.get_score_article(self._batch.enc_batch, self._batch._dec_batch,self._hps.max_num_sentence)
-            with tf.variable_scope("classified_embedding"):
-                classified_embedding = tf.get_variable('classified_embedding', [self.vsize, self._hps.emb_dim],initializer=self.trunc_norm_init)
-                emb_article = tf.nn.embedding_lookup(classified_embedding, self._batch.enc_input)
-            cnn_kwidths_list = self._hps.cnn_kwiths_list #[6,7,8]
-            cnn_hidden_dim = self._hps.cnn_hidden_dim #[128,128,128]
-            self.batch_features = []
-            i=1
-            #for id_article in tf.unstack(emb_article):
-            if i>0:
-                #  id_article# shape:[num_sentence,max_enc_steps,emb_dim]
-                id_article = emb_article
-                pre_v = tf.get_variable('pre_v',shape=[id_article.get_shape()[-1],cnn_hidden_dim[0]])
-                pre_b = tf.get_variable('pre_b',shape=[cnn_hidden_dim[0]],dtype=tf.float32,initializer=tf.zeros_initializer)
-                next_input = id_article * pre_v + pre_b #initlizer ,transfer input article shape to input shape:[5,100,128]
-                for i in range(self._hps.cnn_layers):
-                     with tf.variable_scope('conv_layer_'+str(i)):
-                          in_dim = id_article.get_shape()[-1]
-                          v = tf.get_variable('v',shape=[cnn_kwidths_list[i],in_dim,cnn_hidden_dim[i]],dtype=tf.float32,initializer=tf.random_normal_initializer(mean=0,stddev=0.1),trainable=True)
-                          w = tf.nn.l2_normalize(v,[0,1])
-                          b = tf.get_variable('b',shape=[cnn_hidden_dim[i]],dtype=tf.float32,initializer=tf.zeros_initializer(),trainable=True)
-                          next_input = tf.nn.conv1d(value=next_input,filters=w,stride=1,padding="SAME")
-                fea_w = tf.get_variable('pre_w',shape=[cnn_hidden_dim[-1],1],dtype=tf.float32,initializer=tf.random_normal_initializer(mean=0,stddev=0.1),trainable=True)
-                fea_b = tf.get_variable('fea_b',dtype=tf.float32,initializer=tf.zeros_initializer,trainable=True)
-                article_features = tf.nn.bias_add(tf.matmul(next_input,fea_w),fea_b)
-                self.batch_features.append(article_features)
-                tf.layers.conv2d()
-        return self.batch_features
+            attn_size = transform_output.shape[1]
 
+            w = tf.get_variable("w", [attn_size, attn_size], dtype=tf.float32, initializer=tc.layers.xavier_initializer())
+            b = tf.get_variable("b", [attn_size], dtype=tf.float32)
 
-    def attention_features(self):
+            prediction = tf.matmul(transform_output, w) + b
+
+            prediction = tf.nn.softmax(prediction)
+
+            return prediction
+
+    def _loss(self, preditcted, target):
         """
-        get attention of each sentence in the article
-        :return:
+        Args:
+            preditcted: a 2-D tensor of shape [batch_size, sentence_size]
+            target: a 2-D tensor of shape (same as predicted)
+        Returns:
+            loss
         """
-        self.batch_attention = []
-        with tf.get_variable("attention_features"):
-            for article_features in self.batch_features:
-                num_sentence = article_features.get_shape()[0]
-                article_attention = tf.zeros(num_sentence,num_sentence)
-                article_features =  tf.unstack(article_features,axis=0)
-                for i,sentence_features in enumerate(article_features):
-                     for j in range(i+1,num_sentence):
-                         in_size = self.batch_features[0].get_shape()[-1]
-                         v_att = tf.get_variable('v_att', shape=[in_size, in_size], dtype=tf.float32,initializer=tf.random_normal_initializer(mean=0, stddev=0.1), trainable=True)
-                         pre_attention = tf.matmul(sentence_features,v_att)
-                         sentence_attention = tf.matmul(pre_attention,article_features[j])
-                         article_attention[i][j] = sentence_attention
+        # shape:[batch_size, sentence_size]
+        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=target, logits=preditcted)
 
+        sentence_lengths = tf.reduce_sum(target, axis=1)
 
-    def predictions(self):
-        pass
+        loss = loss/sentence_lengths
 
+        average_loss = loss/self._hps.batch_size
 
+        return average_loss
+
+    
 
